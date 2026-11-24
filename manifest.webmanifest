@@ -1,0 +1,26 @@
+{
+  "id": "./",
+  "name": "കതിർ സ്വയം സഹായ സംഘം",
+  "short_name": "കതിർ",
+  "description": "കതിർ സ്വയം സഹായ സംഘത്തിന്റെ അംഗത്വം, സമ്പാദ്യം, വായ്പ, കണക്ക് എന്നിവ",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f8f6",
+  "theme_color": "#176b4b",
+  "lang": "ml",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

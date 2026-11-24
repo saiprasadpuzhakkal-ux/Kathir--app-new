@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ml">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#176b4b"><meta name="description" content="കതിർ സ്വയം സഹായ സംഘത്തിന്റെ അംഗത്വം, സമ്പാദ്യം, വായ്പ, കണക്ക് എന്നിവ കൈകാര്യം ചെയ്യാനുള്ള ആപ്പ്"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>കതിർ സ്വയം സഹായ സംഘം</title>
+<style>
+:root{--green:#176b4b;--pale:#eaf5ef;--line:#dce5df;--ink:#20312a;--muted:#64736b}
+*{box-sizing:border-box}body{margin:0;background:#f5f8f6;color:var(--ink);font-family:system-ui,"Noto Sans Malayalam",sans-serif}
+header{background:var(--green);color:white;padding:18px 16px}header h1{font-size:21px;margin:0}header p{margin:4px 0 0;font-size:13px;opacity:.9}
+nav{display:flex;gap:7px;overflow:auto;padding:10px;background:white;position:sticky;top:0;border-bottom:1px solid var(--line);z-index:2}
+nav button,.btn{border:0;border-radius:9px;padding:9px 12px;background:var(--pale);color:var(--green);font-weight:650;white-space:nowrap}
+nav button.active,.btn.primary{background:var(--green);color:white}
+main{max-width:1000px;margin:auto;padding:14px}.page{display:none}.page.active{display:block}
+.card{background:white;border:1px solid var(--line);border-radius:13px;padding:14px;margin:10px 0}
+h2{font-size:18px;margin:4px 0 12px}h3{font-size:15px;margin:4px 0 10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:9px}
+.metric{background:white;border:1px solid var(--line);border-radius:12px;padding:13px}.metric b{display:block;font-size:22px;color:var(--green)}.metric span{font-size:12px;color:var(--muted)}
+input,select,textarea{width:100%;padding:10px;border:1px solid #cbd8d0;border-radius:8px;background:white;font:inherit;margin:4px 0 9px}
+label{font-size:13px;color:var(--muted)}.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:9px 6px;border-bottom:1px solid var(--line);vertical-align:middle}th{color:var(--muted);font-weight:650}
+.tablewrap{overflow:auto}.muted{color:var(--muted);font-size:13px}.danger{color:#a33}.small{font-size:12px}
+.actions{display:flex;gap:7px;flex-wrap:wrap}.pill{display:inline-block;padding:3px 8px;border-radius:20px;background:var(--pale);color:var(--green);font-size:12px}
+.empty{padding:15px;text-align:center;color:var(--muted)}button{cursor:pointer}
+@media(max-width:560px){main{padding:9px}.card{padding:11px}th,td{padding:8px 4px}}
+</style></head>
+<body>
+<header><h1>കതിർ സ്വയം സഹായ സംഘം</h1><p>സംഘത്തിന്റെ അംഗത്വം · സമ്പാദ്യം · വായ്പ · കണക്ക്</p></header>
+<nav id="nav"></nav><main id="app"></main>
+<script>
+const KEY='kathir_app_data_v3';
+const defaults={members:[],savings:[],loans:[],meetings:[],transactions:[],investments:[],settings:{weekly:200,savingFine:50,loanRate:10,loanWeeks:20,attendanceFineOn:false,attendanceFine:50}};
+let db;try{db=JSON.parse(localStorage.getItem(KEY))||structuredClone(defaults)}catch(e){db=structuredClone(defaults)}
+db.settings={...defaults.settings,...(db.settings||{})};
+let page='home';
+const pages=[['home','ഹോം'],['members','അംഗങ്ങൾ'],['savings','ആഴ്ച സമ്പാദ്യം'],['loans','വായ്പകൾ'],['meetings','യോഗം'],['accounts','വരവ്-ചെലവ്'],['investments','നിക്ഷേപം'],['backup','ബാക്കപ്പ്'],['settings','ക്രമീകരണം'],['rules','നിയമങ്ങൾ']];
+const $=s=>document.querySelector(s), money=n=>'₹'+(Number(n)||0).toLocaleString('en-IN',{maximumFractionDigits:2});
+function save(){localStorage.setItem(KEY,JSON.stringify(db));render()}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function nav(){ $('#nav').innerHTML=pages.map(([id,n])=>`<button class="${page===id?'active':''}" onclick="go('${id}')">${n}</button>`).join('')}
+function go(p){page=p;render()}
+function memberName(id){return db.members.find(m=>m.id===id)?.name||'നീക്കംചെയ്ത അംഗം'}
+function sum(a,fn){return a.reduce((t,x)=>t+fn(x),0)}
+function formField(label,id,type='text',value='',extra=''){return `<label>${label}</label><input id="${id}" type="${type}" value="${esc(value)}" ${extra}>`}
+function render(){
+ nav();let out='';
+ if(page==='home'){
+ const arrears=sum(db.members,m=>{let r=db.savings.filter(x=>x.member===m.id&&!x.paid);return r.length*(Number(db.settings.weekly)+Number(db.settings.savingFine))});
+ const outstanding=sum(db.loans,l=>Math.max(0,l.total-sum(l.payments||[],p=>p.amount)));
+ const income=sum(db.transactions.filter(t=>t.kind==='income'),t=>t.amount),expense=sum(db.transactions.filter(t=>t.kind==='expense'),t=>t.amount);
+ out=`<h2>സംഘത്തിന്റെ സംഗ്രഹം</h2><div class="grid">
+ <div class="metric"><b>${db.members.length}</b><span>നിലവിലെ അംഗങ്ങൾ</span></div>
+ <div class="metric"><b>${money(arrears)}</b><span>സമ്പാദ്യ കുടിശ്ശികയും പിഴയും</span></div>
+ <div class="metric"><b>${money(outstanding)}</b><span>തിരിച്ചടയ്ക്കാനുള്ള വായ്പ</span></div>
+ <div class="metric"><b>${money(income-expense)}</b><span>രേഖപ്പെടുത്തിയ വരവ് - യഥാർത്ഥ ചെലവ്</span></div></div>
+ <div class="card"><h3>വേഗത്തിലുള്ള കുറിപ്പ്</h3><p class="muted">ആഴ്ച സമ്പാദ്യം: ${money(db.settings.weekly)} · അടയ്ക്കാത്ത ഓരോ ആഴ്ചയ്ക്കുമുള്ള പിഴ: ${money(db.settings.savingFine)}</p><p class="muted">ഈ പതിപ്പ് ഈ ഉപകരണത്തിലെ ബ്രൗസറിൽ മാത്രം വിവരങ്ങൾ സൂക്ഷിക്കുന്നു. ക്ലൗഡ് സിങ്ക്, അംഗങ്ങളുടെ ലോഗിൻ, പല ഉപയോക്താക്കളുടെ അനുമതികൾ എന്നിവ ഇതിലില്ല.</p></div>`;
+ }else if(page==='members'){
+ out=`<h2>അംഗങ്ങൾ</h2><div class="card"><h3>പുതിയ അംഗത്തെ ചേർക്കുക</h3><div class="row">${formField('അംഗത്തിന്റെ പേര്','mname')}${formField('ഫോൺ നമ്പർ (ഐച്ഛികം)','mphone','tel')}</div><button class="btn primary" onclick="addMember()">അംഗത്തെ ചേർക്കുക</button></div><div class="card"><div class="tablewrap"><table><tr><th>പേര്</th><th>ഫോൺ</th><th></th></tr>${db.members.map(m=>`<tr><td>${esc(m.name)}</td><td>${esc(m.phone||'-')}</td><td><button class="btn" onclick="removeMember('${m.id}')">നീക്കുക</button></td></tr>`).join('')||'<tr><td colspan="3" class="empty">അംഗങ്ങളില്ല</td></tr>'}</table></div></div>`;
+ }else if(page==='savings'){
+ out=`<h2>ആഴ്ച സമ്പാദ്യം</h2><div class="card"><div class="row">${formField('ആഴ്ച / തീയതി','sdate','date',new Date().toISOString().slice(0,10))}<div><label>അംഗം</label><select id="smember">${db.members.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select></div></div><button class="btn primary" onclick="addSavings()">ഈ ആഴ്ചയുടെ രേഖ ചേർക്കുക</button><p class="muted">രേഖ ചേർക്കുമ്പോൾ നിലവിലെ സമ്പാദ്യ തുക സൂക്ഷിക്കും. അടച്ചിട്ടില്ലെങ്കിൽ ക്രമീകരണത്തിലെ പിഴ ബാധകമാണ്.</p></div><div class="card"><h3>അംഗങ്ങളുടെ കുടിശ്ശിക</h3><div class="tablewrap"><table><tr><th>അംഗം</th><th>അടയ്ക്കാത്ത ആഴ്ച</th><th>സമ്പാദ്യം</th><th>പിഴ</th><th>ആകെ</th></tr>${db.members.map(m=>{let a=db.savings.filter(x=>x.member===m.id&&!x.paid),s=sum(a,x=>x.amount),f=sum(a,x=>x.fine);return `<tr><td>${esc(m.name)}</td><td>${a.length}</td><td>${money(s)}</td><td>${money(f)}</td><td>${money(s+f)}</td></tr>`}).join('')||'<tr><td colspan="5" class="empty">അംഗങ്ങളെ ആദ്യം ചേർക്കുക</td></tr>'}</table></div></div><div class="card"><h3>സമ്പാദ്യ രേഖകൾ</h3><div class="tablewrap"><table><tr><th>തീയതി</th><th>അംഗം</th><th>തുക</th><th>സ്ഥിതി</th><th></th></tr>${db.savings.slice().reverse().map(x=>`<tr><td>${x.date}</td><td>${esc(memberName(x.member))}</td><td>${money(x.amount)} + ${money(x.fine)}</td><td>${x.paid?'അടച്ചു':'കുടിശ്ശിക'}</td><td><button class="btn" onclick="toggleSaving('${x.id}')">${x.paid?'കുടിശ്ശികയാക്കുക':'അടച്ചതായി രേഖപ്പെടുത്തുക'}</button></td></tr>`).join('')||'<tr><td colspan="5" class="empty">രേഖകളില്ല</td></tr>'}</table></div></div>`;
+ }else if(page==='loans'){
+ out=`<h2>വായ്പകൾ</h2><div class="card"><h3>പുതിയ വായ്പ</h3><div class="row"><div><label>അംഗം</label><select id="lmember">${db.members.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select></div>${formField('വായ്പ തുക','lamount','number','5000')}${formField('പലിശ % (ഫ്ലാറ്റ്)','lrate','number',db.settings.loanRate)}${formField('കാലാവധി (ആഴ്ച)','lweeks','number',db.settings.loanWeeks)}</div><button class="btn primary" onclick="addLoan()">വായ്പ ചേർക്കുക</button></div><div class="card"><div class="tablewrap"><table><tr><th>അംഗം</th><th>മുതൽ</th><th>പലിശ</th><th>ആകെ</th><th>ബാക്കി</th><th>അടവ്</th></tr>${db.loans.map(l=>{let paid=sum(l.payments||[],p=>p.amount),bal=Math.max(0,l.total-paid);return `<tr><td>${esc(memberName(l.member))}</td><td>${money(l.principal)}</td><td>${l.rate}%</td><td>${money(l.total)}</td><td>${money(bal)}</td><td><button class="btn" onclick="repay('${l.id}')">അടവ് ചേർക്കുക</button><div class="small muted">${(l.payments||[]).length} അടവുകൾ</div></td></tr>`}).join('')||'<tr><td colspan="6" class="empty">വായ്പകളില്ല</td></tr>'}</table></div></div>`;
+ }else if(page==='meetings'){
+ out=`<h2>യോഗവും ഹാജറും</h2><div class="card"><div class="row">${formField('യോഗ തീയതി','meetdate','date',new Date().toISOString().slice(0,10))}${formField('കുറിപ്പ്','meetnote')}</div><button class="btn primary" onclick="addMeeting()">യോഗം സൃഷ്ടിക്കുക</button><p class="muted">ഹാജർ പിഴ നിലവിൽ ${db.settings.attendanceFineOn?'ഓൺ':'ഓഫ്'} ആണ്. ഓരോ യോഗത്തിലും ആ സമയത്തെ ക്രമീകരണം രേഖപ്പെടുത്തും.</p></div>${db.meetings.slice().reverse().map(mt=>`<div class="card"><h3>${mt.date} <span class="pill">${mt.fineOn?'പിഴ ഓൺ':'പിഴ ഓഫ്'}</span></h3><p class="muted">${esc(mt.note||'')}</p>${mt.attendance.map(a=>`<div class="row" style="align-items:center"><div>${esc(memberName(a.member))}</div><div><select onchange="setAttendance('${mt.id}','${a.member}',this.value)"><option value="present" ${a.status==='present'?'selected':''}>ഹാജർ</option><option value="absent" ${a.status==='absent'?'selected':''}>ഹാജരായില്ല</option></select></div></div>`).join('')}</div>`).join('')}`;
+ }else if(page==='accounts'){
+ out=`<h2>വരവ് - യഥാർത്ഥ ചെലവ്</h2><div class="card"><div class="row"><div><label>ഇടപാട് തരം</label><select id="tkind"><option value="income">വരവ്</option><option value="expense">യഥാർത്ഥ ചെലവ്</option></select></div>${formField('തുക','tamount','number')}${formField('തീയതി','tdate','date',new Date().toISOString().slice(0,10))}${formField('വിവരണം','tdesc')}</div><button class="btn primary" onclick="addTransaction()">രേഖപ്പെടുത്തുക</button></div><div class="card"><div class="tablewrap"><table><tr><th>തീയതി</th><th>തരം</th><th>വിവരണം</th><th>തുക</th></tr>${db.transactions.slice().reverse().map(t=>`<tr><td>${t.date}</td><td>${t.kind==='income'?'വരവ്':'ചെലവ്'}</td><td>${esc(t.desc)}</td><td>${money(t.amount)}</td></tr>`).join('')||'<tr><td colspan="4" class="empty">രേഖകളില്ല</td></tr>'}</table></div></div>`;
+ }else if(page==='investments'){
+ out=`<h2>നിക്ഷേപം / ഫണ്ട് മാറ്റിവെക്കൽ</h2><div class="card"><p class="muted">ഉദാ: ബാങ്ക് ലേലക്കുറിയിലേക്കുള്ള മാസ അടവ്. ഇത് യഥാർത്ഥ ചെലവായി കണക്കാക്കില്ല.</p><div class="row">${formField('തീയതി','idate','date',new Date().toISOString().slice(0,10))}${formField('തുക','iamount','number')}${formField('വിവരണം','idesc')}</div><button class="btn primary" onclick="addInvestment()">നിക്ഷേപം രേഖപ്പെടുത്തുക</button></div><div class="card"><div class="tablewrap"><table><tr><th>തീയതി</th><th>വിവരണം</th><th>തുക</th></tr>${db.investments.slice().reverse().map(x=>`<tr><td>${x.date}</td><td>${esc(x.desc)}</td><td>${money(x.amount)}</td></tr>`).join('')||'<tr><td colspan="3" class="empty">രേഖകളില്ല</td></tr>'}</table></div></div>`;
+ }else if(page==='settings'){
+ out=`<h2>ക്രമീകരണങ്ങൾ</h2><div class="card"><div class="row">${formField('ആഴ്ച സമ്പാദ്യം (₹)','setweekly','number',db.settings.weekly)}${formField('സമ്പാദ്യ പിഴ (₹)','setfine','number',db.settings.savingFine)}${formField('വായ്പ പലിശ %','setrate','number',db.settings.loanRate)}${formField('വായ്പ കാലാവധി (ആഴ്ച)','setweeks','number',db.settings.loanWeeks)}${formField('യോഗം ഒഴിവാക്കിയാൽ പിഴ (₹)','setattfine','number',db.settings.attendanceFine)}</div><label><input id="setatton" type="checkbox" style="width:auto" ${db.settings.attendanceFineOn?'checked':''}> ഭാവിയിലെ യോഗങ്ങൾക്ക് ഹാജർ പിഴ ഓൺ ചെയ്യുക</label><p><button class="btn primary" onclick="saveSettings()">ക്രമീകരണം സൂക്ഷിക്കുക</button></p><p class="muted">നിലവിലുള്ള സമ്പാദ്യ/വായ്പ രേഖകളിലെ പഴയ തുകകളും വായ്പകളിലെ പലിശയും മാറ്റില്ല. പുതുതായി സൃഷ്ടിക്കുന്ന രേഖകൾക്ക് മാത്രമേ പുതിയ ക്രമീകരണം ബാധകമാകൂ.</p></div>`;
+ }else if(page==='backup'){
+ out=`<h2>ബാക്കപ്പ് / പുനഃസ്ഥാപിക്കൽ</h2><div class="card"><p>സംഘത്തിന്റെ ഡാറ്റ JSON ഫയലായി ഡൗൺലോഡ് ചെയ്യാം. മറ്റൊരു ഉപകരണത്തിൽ ഈ ഫയൽ ഉപയോഗിച്ച് പുനഃസ്ഥാപിക്കാം.</p><button class="btn primary" onclick="downloadBackup()">ബാക്കപ്പ് ഡൗൺലോഡ്</button><hr><label>ബാക്കപ്പ് ഫയൽ തിരഞ്ഞെടുക്കുക</label><input type="file" id="backupfile" accept=".json,application/json"><button class="btn" onclick="restoreBackup()">ബാക്കപ്പ് പുനഃസ്ഥാപിക്കുക</button><p class="muted danger">പുനഃസ്ഥാപിക്കുമ്പോൾ ഇപ്പോഴുള്ള ഡാറ്റ മാറ്റിസ്ഥാപിക്കും.</p></div>`;
+ }else if(page==='rules'){
+ out=`<h2>സംഘത്തിന്റെ അടിസ്ഥാന നിയമങ്ങൾ</h2><div class="card"><ul><li>ഓരോ അംഗവും ആഴ്ചയിൽ ${money(db.settings.weekly)} സമ്പാദ്യം അടയ്ക്കണം.</li><li>അടയ്ക്കാത്ത ഓരോ ആഴ്ചയ്ക്കും ${money(db.settings.savingFine)} പിഴ.</li><li>വായ്പയുടെ പലിശയും കാലാവധിയും ക്രമീകരണങ്ങളിൽ മാറ്റാം; ഓരോ വായ്പയിലും അനുവദിച്ച സമയത്തെ നിരക്കും കാലാവധിയും സൂക്ഷിക്കും.</li><li>ഹാജർ പിഴ നിലവിൽ ${db.settings.attendanceFineOn?'പ്രാബല്യത്തിൽ':'പ്രാബല്യത്തിലല്ല'}.</li><li>സംഘത്തിന്റെ യോഗത്തിൽ തീരുമാനിച്ച ഔദ്യോഗിക നിയമങ്ങൾക്കാണ് അന്തിമ പ്രാബല്യം.</li></ul></div>`;
+ }
+ $('#app').innerHTML=out;
+}
+function id(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+function val(x){return $( '#'+x)?.value??''}
+function addMember(){let n=val('mname').trim();if(!n)return alert('പേര് നൽകുക');db.members.push({id:id(),name:n,phone:val('mphone')});save()}
+function removeMember(i){if(confirm('ഈ അംഗത്തെ പട്ടികയിൽ നിന്ന് നീക്കണോ? പഴയ ഇടപാട് രേഖകൾ നിലനിൽക്കും.')){db.members=db.members.filter(m=>m.id!==i);save()}}
+function addSavings(){let d=val('sdate'),m=val('smember');if(!d||!m)return alert('തീയതിയും അംഗവും തിരഞ്ഞെടുക്കുക');if(db.savings.some(x=>x.date===d&&x.member===m))return alert('ഈ തീയതിയിൽ ഈ അംഗത്തിന് രേഖ നിലവിലുണ്ട്');db.savings.push({id:id(),date:d,member:m,amount:Number(db.settings.weekly),fine:Number(db.settings.savingFine),paid:false});save()}
+function toggleSaving(i){let x=db.savings.find(x=>x.id===i);x.paid=!x.paid;save()}
+function addLoan(){let principal=Number(val('lamount')),rate=Number(val('lrate')),weeks=Number(val('lweeks')),member=val('lmember');if(!member||principal<=0||weeks<=0||rate<0)return alert('വിവരങ്ങൾ ശരിയായി നൽകുക');let interest=principal*rate/100;db.loans.push({id:id(),member,principal,rate,weeks,total:principal+interest,created:new Date().toISOString().slice(0,10),payments:[]});save()}
+function repay(i){let l=db.loans.find(x=>x.id===i),paid=sum(l.payments||[],p=>p.amount),bal=l.total-paid;if(bal<=0)return alert('വായ്പ പൂർണ്ണമായി അടച്ചു');let a=Number(prompt('അടച്ച തുക നൽകുക. ബാക്കി: '+money(bal)));if(!a||a<=0||a>bal)return alert('ശരിയായ തുക നൽകുക');l.payments.push({date:new Date().toISOString().slice(0,10),amount:a});save()}
+function addMeeting(){let date=val('meetdate');if(!date)return alert('തീയതി നൽകുക');db.meetings.push({id:id(),date,note:val('meetnote'),fineOn:db.settings.attendanceFineOn,fineAmount:Number(db.settings.attendanceFine),attendance:db.members.map(m=>({member:m.id,status:'present'}))});save()}
+function setAttendance(mid,mem,status){let mt=db.meetings.find(x=>x.id===mid),a=mt.attendance.find(x=>x.member===mem);if(a)a.status=status;save()}
+function addTransaction(){let amount=Number(val('tamount'));if(amount<=0)return alert('തുക നൽകുക');db.transactions.push({id:id(),kind:val('tkind'),amount,date:val('tdate'),desc:val('tdesc')});save()}
+function addInvestment(){let amount=Number(val('iamount'));if(amount<=0)return alert('തുക നൽകുക');db.investments.push({id:id(),amount,date:val('idate'),desc:val('idesc')});save()}
+function saveSettings(){db.settings={weekly:Number(val('setweekly')),savingFine:Number(val('setfine')),loanRate:Number(val('setrate')),loanWeeks:Number(val('setweeks')),attendanceFine:Number(val('setattfine')),attendanceFineOn:$('#setatton').checked};if(db.settings.weekly<0||db.settings.savingFine<0||db.settings.loanRate<0||db.settings.loanWeeks<1)return alert('ക്രമീകരണങ്ങൾ പരിശോധിക്കുക');save()}
+function downloadBackup(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='kathir-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(a.href)}
+function restoreBackup(){let f=$('#backupfile').files[0];if(!f)return alert('ഫയൽ തിരഞ്ഞെടുക്കുക');let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);if(!d.members||!d.settings)throw 0;if(confirm('ഇപ്പോഴുള്ള ഡാറ്റ മാറ്റിസ്ഥാപിക്കട്ടേ?')){db=d;db.settings={...defaults.settings,...db.settings};save()}}catch(e){alert('ഈ ബാക്കപ്പ് ഫയൽ വായിക്കാൻ കഴിയില്ല')}};r.readAsText(f)}
+render();
+</script>
+<script>
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(err => console.error('Service worker registration failed:', err));
+  });
+}
+</script></body></html>
