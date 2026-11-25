@@ -33,6 +33,7 @@ let db;try{db=JSON.parse(localStorage.getItem(KEY))||structuredClone(defaults)}c
 db.settings={...defaults.settings,...(db.settings||{})};
 let page='home';
 let savingsFocusDate='';
+let editingSavingId='';
 const pages=[['home','ഹോം'],['members','അംഗങ്ങൾ'],['savings','ആഴ്ച സമ്പാദ്യം'],['loans','വായ്പകൾ'],['meetings','യോഗം'],['accounts','വരവ്-ചെലവ്'],['investments','നിക്ഷേപം'],['backup','ബാക്കപ്പ്'],['settings','ക്രമീകരണം'],['rules','നിയമങ്ങൾ']];
 const $=s=>document.querySelector(s), money=n=>'₹'+(Number(n)||0).toLocaleString('en-IN',{maximumFractionDigits:2});
 function save(){localStorage.setItem(KEY,JSON.stringify(db));render()}
@@ -72,14 +73,14 @@ function render(){
    <td><input style="min-width:85px" type="number" min="0" step="0.01" id="${prefix}_fine" value="${fine}" ${locked?'disabled':''}></td>
    <td><input style="min-width:135px" type="date" id="${prefix}_date" value="${x?x.date:today}" ${locked?'disabled':''}></td>
    <td><b id="${prefix}_total">${money(a+amount+fine)}</b></td>
-   <td>${locked?`<span class="pill">പൂർത്തിയായി</span><br><button class="btn" onclick="reopenWeeklySaving('${x.id}')">എഡിറ്റ്</button>`:`<button class="btn primary" onclick="completeWeeklySaving('${m.id}','${x?x.id:''}')">✓ പൂർത്തിയാക്കുക</button>`}</td></tr>`;
+   <td>${locked?`<span class="pill">പൂർത്തിയായി</span><br><button class="btn" onclick="editWeeklySaving('${x.id}')">എഡിറ്റ്</button>`:`<button class="btn primary" onclick="completeWeeklySaving('${m.id}','${x?x.id:''}')">✓ പൂർത്തിയാക്കുക</button>`}</td></tr>`;
  }).join('')}
  </tbody></table></div>`:'<div class="empty">അംഗങ്ങളെ ആദ്യം ചേർക്കുക</div>'}
  </div><div class="card"><h3>കുടിശ്ശികയുടെ സംഗ്രഹം</h3><div class="tablewrap"><table><tr><th>അംഗം</th><th>ബാക്കിയുള്ള സമ്പാദ്യം</th><th>ബാക്കിയുള്ള പിഴ</th><th>ആകെ കുടിശ്ശിക</th></tr>
  ${db.members.map((m,i)=>{let a=db.savings.filter(x=>x.member===m.id&&!x.paid),s=sum(a,x=>Math.max(0,Number(x.amount||0)-Math.min(Number(x.amount||0),Number(x.arrearsPaid||0)))),f=sum(a,x=>Math.max(0,Number(x.fine||0)-Math.max(0,Number(x.arrearsPaid||0)-Number(x.amount||0))));return `<tr><td>${i+1}. ${esc(m.name)}</td><td>${money(s)}</td><td>${money(f)}</td><td>${money(s+f)}</td></tr>`}).join('')||'<tr><td colspan="4" class="empty">അംഗങ്ങളില്ല</td></tr>'}
  </table></div></div><div class="card"><h3>സമ്പാദ്യ ഇടപാടുകളുടെ ചരിത്രം</h3><div class="tablewrap"><table><tr><th>തീയതി</th><th>അംഗം</th><th>സമ്പാദ്യം</th><th>പിഴ</th><th>കുടിശ്ശിക അടവ്</th><th>സ്ഥിതി</th></tr>
- ${db.savings.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(memberName(x.member))}</td><td>${money(x.amount)}</td><td>${money(x.fine)}</td><td>${money(x.arrearsPayment||0)}</td><td>${x.paid?'പൂർത്തിയായി':'കുടിശ്ശിക'} <button class="btn" onclick="reopenWeeklySaving('${x.id}')">എഡിറ്റ്</button></td></tr>`).join('')||'<tr><td colspan="6" class="empty">രേഖകളില്ല</td></tr>'}
- </table></div></div>`;
+ ${db.savings.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(memberName(x.member))}</td><td>${money(x.amount)}</td><td>${money(x.fine)}</td><td>${money(x.arrearsPayment||0)}</td><td>${x.paid?'പൂർത്തിയായി':'കുടിശ്ശിക'} <div class="actions"><button class="btn" onclick="editWeeklySaving('${x.id}')">തിരുത്തുക</button><button class="btn danger" onclick="deleteWeeklySaving('${x.id}')">ഡിലീറ്റ്</button></div></td></tr>`).join('')||'<tr><td colspan="6" class="empty">രേഖകളില്ല</td></tr>'}
+ </table></div></div>${editingSavingId?(()=>{const e=db.savings.find(z=>z.id===editingSavingId);return e?`<div class="card" id="savingEditor"><h3>ഇടപാട് തിരുത്തുക</h3><p class="muted">${esc(memberName(e.member))} · പഴയ രേഖ: ${esc(e.date)}</p><div class="row">${formField('തീയതി','editSavingDate','date',e.date)}${formField('സമ്പാദ്യം (₹)','editSavingAmount','number',e.amount||0)}${formField('പിഴ (₹)','editSavingFine','number',e.fine||0)}${formField('കുടിശ്ശിക അടച്ച തുക (₹)','editSavingArrears','number',e.arrearsPayment||0)}</div><p class="muted">തിരുത്തിയ ശേഷം സേവ് ചെയ്താൽ കുടിശ്ശിക കണക്കുകൾ വീണ്ടും ക്രമീകരിക്കും.</p><div class="actions"><button class="btn primary" onclick="saveWeeklySavingEdit()">മാറ്റങ്ങൾ സേവ് ചെയ്യുക</button><button class="btn" onclick="cancelWeeklySavingEdit()">റദ്ദാക്കുക</button><button class="btn danger" onclick="deleteWeeklySaving('${e.id}')">ഈ ഇടപാട് ഡിലീറ്റ് ചെയ്യുക</button></div></div>`:''})():''}`;
  }else if(page==='loans'){
  out=`<h2>വായ്പകൾ</h2><div class="card"><h3>പുതിയ വായ്പ</h3><div class="row"><div><label>അംഗം</label><select id="lmember">${db.members.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select></div>${formField('വായ്പ തുക','lamount','number','5000')}${formField('പലിശ % (ഫ്ലാറ്റ്)','lrate','number',db.settings.loanRate)}${formField('കാലാവധി (ആഴ്ച)','lweeks','number',db.settings.loanWeeks)}</div><button class="btn primary" onclick="addLoan()">വായ്പ ചേർക്കുക</button></div><div class="card"><div class="tablewrap"><table><tr><th>അംഗം</th><th>മുതൽ</th><th>പലിശ</th><th>ആകെ</th><th>ബാക്കി</th><th>അടവ്</th></tr>${db.loans.map(l=>{let paid=sum(l.payments||[],p=>p.amount),bal=Math.max(0,l.total-paid);return `<tr><td>${esc(memberName(l.member))}</td><td>${money(l.principal)}</td><td>${l.rate}%</td><td>${money(l.total)}</td><td>${money(bal)}</td><td><button class="btn" onclick="repay('${l.id}')">അടവ് ചേർക്കുക</button><div class="small muted">${(l.payments||[]).length} അടവുകൾ</div></td></tr>`}).join('')||'<tr><td colspan="6" class="empty">വായ്പകളില്ല</td></tr>'}</table></div></div>`;
  }else if(page==='meetings'){
@@ -116,19 +117,36 @@ function completeWeeklySaving(member,existingId){
  for(const debt of debts){let left=Math.max(0,Number(debt.amount||0)+Number(debt.fine||0)-Number(debt.arrearsPaid||0));let take=Math.min(left,remaining);if(take>0){debt.arrearsPaid=Number(debt.arrearsPaid||0)+take;x.arrearsAllocations.push({id:debt.id,amount:take});remaining-=take}if(remaining<=0.009)break}
  x.paid=true;save();
 }
-function reopenWeeklySaving(i){
- let x=db.savings.find(z=>z.id===i);
- if(!x){alert('ഈ ഇടപാട് കണ്ടെത്താനായില്ല');return;}
- if(x.paid){
-  for(const a of (x.arrearsAllocations||[])){
-   let debt=db.savings.find(z=>z.id===a.id);
-   if(debt)debt.arrearsPaid=Math.max(0,Number(debt.arrearsPaid||0)-Number(a.amount||0));
-  }
-  x.arrearsAllocations=[];x.arrearsPayment=0;x.paid=false;
- }
- savingsFocusDate=x.date;page='savings';save();window.scrollTo({top:0,behavior:'smooth'});
+function editWeeklySaving(i){
+ const x=db.savings.find(z=>z.id===i);if(!x){alert('ഈ ഇടപാട് കണ്ടെത്താനായില്ല');return;}
+ editingSavingId=i;page='savings';render();setTimeout(()=>document.getElementById('savingEditor')?.scrollIntoView({behavior:'smooth',block:'start'}),50);
 }
-window.reopenWeeklySaving=reopenWeeklySaving;
+function rebuildSavingsArrears(){
+ for(const x of db.savings){x.arrearsPaid=0;x.arrearsAllocations=[];}
+ const paid=db.savings.filter(x=>x.paid).slice().sort((a,b)=>a.date.localeCompare(b.date));
+ for(const x of paid){let remaining=Math.max(0,Number(x.arrearsPayment||0));
+  const debts=db.savings.filter(z=>z.id!==x.id&&z.member===x.member&&!z.paid&&z.date<x.date).sort((a,b)=>a.date.localeCompare(b.date));
+  for(const debt of debts){const left=Math.max(0,Number(debt.amount||0)+Number(debt.fine||0)-Number(debt.arrearsPaid||0));const take=Math.min(left,remaining);if(take>0){debt.arrearsPaid+=take;x.arrearsAllocations.push({id:debt.id,amount:take});remaining-=take;}if(remaining<=0.009)break;}
+ }
+}
+function saveWeeklySavingEdit(){
+ const x=db.savings.find(z=>z.id===editingSavingId);if(!x)return alert('ഇടപാട് കണ്ടെത്താനായില്ല');
+ const d=val('editSavingDate'),amount=Number(val('editSavingAmount')),fine=Number(val('editSavingFine')),arrearsPayment=Number(val('editSavingArrears'));
+ if(!d||![amount,fine,arrearsPayment].every(n=>Number.isFinite(n)&&n>=0))return alert('തീയതിയും തുകയും ശരിയായി നൽകുക');
+ if(db.savings.some(z=>z.id!==x.id&&z.member===x.member&&z.date===d))return alert('ഈ തീയതിയിൽ ഈ അംഗത്തിന് മറ്റൊരു ഇടപാട് നിലവിലുണ്ട്.');
+ const old={date:x.date,amount:x.amount,fine:x.fine,arrearsPayment:x.arrearsPayment};
+ x.date=d;x.amount=amount;x.fine=fine;x.arrearsPayment=arrearsPayment;
+ rebuildSavingsArrears();
+ const allocated=sum(x.arrearsAllocations||[],a=>Number(a.amount||0));
+ if(x.paid&&arrearsPayment>allocated+0.009){Object.assign(x,old);rebuildSavingsArrears();return alert('ഈ തീയതിവരെ അടയ്ക്കാനുള്ള പഴയ കുടിശ്ശികയെക്കാൾ കൂടുതലാണ് കുടിശ്ശിക അടവ്. ലഭ്യമായ കുടിശ്ശിക: '+money(allocated));}
+ editingSavingId='';savingsFocusDate=d;save();alert('ഇടപാട് തിരുത്തി സേവ് ചെയ്തു.');
+}
+function cancelWeeklySavingEdit(){editingSavingId='';render();}
+function deleteWeeklySaving(i){
+ const x=db.savings.find(z=>z.id===i);if(!x)return alert('ഇടപാട് കണ്ടെത്താനായില്ല');
+ if(!confirm(memberName(x.member)+' എന്ന അംഗത്തിന്റെ '+x.date+' തീയതിയിലെ ഈ സമ്പാദ്യ ഇടപാട് പൂർണമായി ഡിലീറ്റ് ചെയ്യട്ടേ? ഇതുമായി ബന്ധപ്പെട്ട കുടിശ്ശിക കണക്കുകൾ വീണ്ടും ക്രമീകരിക്കും.'))return;
+ db.savings=db.savings.filter(z=>z.id!==i);if(editingSavingId===i)editingSavingId='';rebuildSavingsArrears();save();alert('ഇടപാട് ഡിലീറ്റ് ചെയ്തു.');
+}
 function addLoan(){let principal=Number(val('lamount')),rate=Number(val('lrate')),weeks=Number(val('lweeks')),member=val('lmember');if(!member||principal<=0||weeks<=0||rate<0)return alert('വിവരങ്ങൾ ശരിയായി നൽകുക');let interest=principal*rate/100;db.loans.push({id:id(),member,principal,rate,weeks,total:principal+interest,created:new Date().toISOString().slice(0,10),payments:[]});save()}
 function repay(i){let l=db.loans.find(x=>x.id===i),paid=sum(l.payments||[],p=>p.amount),bal=l.total-paid;if(bal<=0)return alert('വായ്പ പൂർണ്ണമായി അടച്ചു');let a=Number(prompt('അടച്ച തുക നൽകുക. ബാക്കി: '+money(bal)));if(!a||a<=0||a>bal)return alert('ശരിയായ തുക നൽകുക');l.payments.push({date:new Date().toISOString().slice(0,10),amount:a});save()}
 function addMeeting(){let date=val('meetdate');if(!date)return alert('തീയതി നൽകുക');db.meetings.push({id:id(),date,note:val('meetnote'),fineOn:db.settings.attendanceFineOn,fineAmount:Number(db.settings.attendanceFine),attendance:db.members.map(m=>({member:m.id,status:'present'}))});save()}
