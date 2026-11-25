@@ -126,7 +126,7 @@ function reopenWeeklySaving(i){
   }
   x.arrearsAllocations=[];x.arrearsPayment=0;x.paid=false;
  }
- savingsFocusDate=x.date;page='savings';save();
+ savingsFocusDate=x.date;page='savings';save();window.scrollTo({top:0,behavior:'smooth'});
 }
 window.reopenWeeklySaving=reopenWeeklySaving;
 function addLoan(){let principal=Number(val('lamount')),rate=Number(val('lrate')),weeks=Number(val('lweeks')),member=val('lmember');if(!member||principal<=0||weeks<=0||rate<0)return alert('വിവരങ്ങൾ ശരിയായി നൽകുക');let interest=principal*rate/100;db.loans.push({id:id(),member,principal,rate,weeks,total:principal+interest,created:new Date().toISOString().slice(0,10),payments:[]});save()}
