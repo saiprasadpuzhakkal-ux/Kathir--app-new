@@ -116,10 +116,19 @@ function completeWeeklySaving(member,existingId){
  for(const debt of debts){let left=Math.max(0,Number(debt.amount||0)+Number(debt.fine||0)-Number(debt.arrearsPaid||0));let take=Math.min(left,remaining);if(take>0){debt.arrearsPaid=Number(debt.arrearsPaid||0)+take;x.arrearsAllocations.push({id:debt.id,amount:take});remaining-=take}if(remaining<=0.009)break}
  x.paid=true;save();
 }
-function reopenWeeklySaving(i){let x=db.savings.find(z=>z.id===i);if(!x)return;if(x.paid){if(!confirm('ഈ ഇടപാട് വീണ്ടും എഡിറ്റ് ചെയ്യണോ?'))return;
- for(const a of (x.arrearsAllocations||[])){let debt=db.savings.find(z=>z.id===a.id);if(debt)debt.arrearsPaid=Math.max(0,Number(debt.arrearsPaid||0)-Number(a.amount||0))}
- x.arrearsAllocations=[];x.arrearsPayment=0;x.paid=false;}savingsFocusDate=x.date;save();
+function reopenWeeklySaving(i){
+ let x=db.savings.find(z=>z.id===i);
+ if(!x){alert('ഈ ഇടപാട് കണ്ടെത്താനായില്ല');return;}
+ if(x.paid){
+  for(const a of (x.arrearsAllocations||[])){
+   let debt=db.savings.find(z=>z.id===a.id);
+   if(debt)debt.arrearsPaid=Math.max(0,Number(debt.arrearsPaid||0)-Number(a.amount||0));
+  }
+  x.arrearsAllocations=[];x.arrearsPayment=0;x.paid=false;
+ }
+ savingsFocusDate=x.date;page='savings';save();
 }
+window.reopenWeeklySaving=reopenWeeklySaving;
 function addLoan(){let principal=Number(val('lamount')),rate=Number(val('lrate')),weeks=Number(val('lweeks')),member=val('lmember');if(!member||principal<=0||weeks<=0||rate<0)return alert('വിവരങ്ങൾ ശരിയായി നൽകുക');let interest=principal*rate/100;db.loans.push({id:id(),member,principal,rate,weeks,total:principal+interest,created:new Date().toISOString().slice(0,10),payments:[]});save()}
 function repay(i){let l=db.loans.find(x=>x.id===i),paid=sum(l.payments||[],p=>p.amount),bal=l.total-paid;if(bal<=0)return alert('വായ്പ പൂർണ്ണമായി അടച്ചു');let a=Number(prompt('അടച്ച തുക നൽകുക. ബാക്കി: '+money(bal)));if(!a||a<=0||a>bal)return alert('ശരിയായ തുക നൽകുക');l.payments.push({date:new Date().toISOString().slice(0,10),amount:a});save()}
 function addMeeting(){let date=val('meetdate');if(!date)return alert('തീയതി നൽകുക');db.meetings.push({id:id(),date,note:val('meetnote'),fineOn:db.settings.attendanceFineOn,fineAmount:Number(db.settings.attendanceFine),attendance:db.members.map(m=>({member:m.id,status:'present'}))});save()}
