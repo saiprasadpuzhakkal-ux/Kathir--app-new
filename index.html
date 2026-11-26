@@ -40,7 +40,7 @@ function formatDateDisplay(v){if(!v||v==='-')return v||'-';const m=String(v).mat
 function parseDateDisplay(v){v=String(v||'').trim();if(!v)return '';let m=v.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/);if(m){const d=Number(m[1]),mo=Number(m[2]),y=Number(m[3]),dt=new Date(y,mo-1,d);if(dt.getFullYear()!==y||dt.getMonth()!==mo-1||dt.getDate()!==d)return '';return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`}if(/^\d{4}-\d{2}-\d{2}$/.test(v))return v;return ''}
 function formatTimeDisplay(v){if(!v||v==='രേഖപ്പെടുത്തിയിട്ടില്ല')return v||'';const m=String(v).match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);if(!m)return String(v);let h=Number(m[1]);if(h>23||Number(m[2])>59)return String(v);const ap=h>=12?'PM':'AM';h=h%12||12;return `${String(h).padStart(2,'0')}:${m[2]} ${ap}`}
 function parseTimeDisplay(v){v=String(v||'').trim().toUpperCase().replace(/\s+/g,' ');if(!v)return '';let m=v.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/);if(m){let h=Number(m[1]),mi=Number(m[2]);if(h<1||h>12||mi>59)return '';h=h%12+(m[3]==='PM'?12:0);return `${String(h).padStart(2,'0')}:${String(mi).padStart(2,'0')}`}m=v.match(/^(\d{1,2}):(\d{2})$/);if(m&&Number(m[1])<24&&Number(m[2])<60)return `${String(Number(m[1])).padStart(2,'0')}:${m[2]}`;return ''}
-function formatDateTimeInputs(){document.querySelectorAll('#app input[type="date"],#app input[type="time"]').forEach(el=>{const kind=el.type==='date'?'date':'time',raw=el.value;el.dataset.format=kind;el.type='text';el.inputMode='text';el.placeholder=kind==='date'?'DD/MM/YYYY':'hh:mm AM/PM';el.autocomplete='off';el.value=kind==='date'?formatDateDisplay(raw):formatTimeDisplay(raw);el.addEventListener('blur',()=>{const parsed=kind==='date'?parseDateDisplay(el.value):parseTimeDisplay(el.value);if(parsed)el.value=kind==='date'?formatDateDisplay(parsed):formatTimeDisplay(parsed);});});}
+function formatDateTimeInputs(){document.querySelectorAll('#app input[type="date"]').forEach(el=>{el.lang='en-GB';el.setAttribute('aria-label','തീയതി തിരഞ്ഞെടുക്കുക');});document.querySelectorAll('#app input[type="time"]').forEach(el=>{el.lang='en-US';el.setAttribute('aria-label','സമയം തിരഞ്ഞെടുക്കുക');});}
 
 function save(){localStorage.setItem(KEY,JSON.stringify(db));render()}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -105,7 +105,7 @@ function render(){
  $('#app').innerHTML=out;formatDateTimeInputs();
 }
 function id(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
-function val(x){const el=$('#'+x);if(!el)return '';const v=el.value??'';if(el.dataset.format==='date')return parseDateDisplay(v);if(el.dataset.format==='time')return parseTimeDisplay(v);return v}
+function val(x){const el=$('#'+x);if(!el)return '';return el.value??'';}
 function addMember(){let n=val('mname').trim(),d=val('mjoindate');if(!n)return alert('പേര് നൽകുക');if(!d)return alert('ചേർന്ന തീയതി തിരഞ്ഞെടുക്കുക');db.members.push({id:id(),name:n,phone:val('mphone'),joinDate:d,role:val('mrole')||'member'});save()}
 function updateMemberRole(i,role){let m=db.members.find(x=>x.id===i);if(!m)return;m.role=role;save()}
 function removeMember(i){if(confirm('ഈ അംഗത്തെ പട്ടികയിൽ നിന്ന് നീക്കണോ? പഴയ ഇടപാട് രേഖകൾ നിലനിൽക്കും.')){db.members=db.members.filter(m=>m.id!==i);save()}}
