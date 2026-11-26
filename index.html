@@ -34,6 +34,7 @@ db.settings={...defaults.settings,...(db.settings||{})};
 let page='home';
 let savingsFocusDate='';
 let editingSavingId='';
+let meetingSections={};
 const pages=[['home','ഹോം'],['members','അംഗങ്ങൾ'],['savings','ആഴ്ച സമ്പാദ്യം'],['loans','വായ്പകൾ'],['meetings','യോഗം'],['accounts','വരവ്-ചെലവ്'],['investments','നിക്ഷേപം'],['backup','ബാക്കപ്പ്'],['settings','ക്രമീകരണം'],['rules','നിയമങ്ങൾ']];
 const $=s=>document.querySelector(s), money=n=>'₹'+(Number(n)||0).toLocaleString('en-IN',{maximumFractionDigits:2});
 function formatDateDisplay(v){if(!v||v==='-')return v||'-';const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?`${m[3]}/${m[2]}/${m[1]}`:String(v)}
