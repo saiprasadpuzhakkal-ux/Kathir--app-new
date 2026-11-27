@@ -197,8 +197,39 @@ function completeWeeklySaving(member,existingId,meetingId){
  const due=sum(db.savings.filter(z=>z.member===member&&!z.paid&&(!x||z.id!==x.id)&&isSavingBeforeMeeting(z,mt)),z=>Math.max(0,Number(z.amount||0)+Number(z.fine||0)-Number(z.arrearsPaid||0)));
  if(arrearsPayment>due+0.009)return alert('നൽകിയ കുടിശ്ശിക അടവ് നിലവിലുള്ള കുടിശ്ശികയെക്കാൾ കൂടുതലാണ്: '+money(due));
  if(!x){x={id:id(),member,meetingId,date:mt.date,amount:0,fine:0,paid:false,arrearsPaid:0};db.savings.push(x);}
- x.meetingId=meetingId;x.date=mt.date;x.amount=amount;x.fine=fine;x.arrearsPayment=arrearsPayment;x.arrearsAllocations=[];
- x.paid=true;rebuildSavingsArrears();save();
+ x.meetingId=meetingId;x.date=mt.date;x.amount=amount;x.fine=fine;x.arrearsPayment=arrearsPayment;x.arrearsAllocations=[];x.paid=true;
+ rebuildSavingsArrears();save();
+}
+function rebuildSavingsArrears(){
+ // Rebuild the arrears balances and generated fine-income transactions from paid arrears entries.
+ db.transactions=(db.transactions||[]).filter(t=>t.source!=='arrears-fine');
+ for(const x of db.savings){x.arrearsPaid=0;x.arrearsAllocations=[];}
+ const principalAllocated={},fineAllocated={};
+ const paid=db.savings.filter(x=>x.paid).slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+ for(const payment of paid){
+  let remaining=Math.max(0,Number(payment.arrearsPayment||0));
+  const debts=db.savings.filter(debt=>{
+   if(debt.id===payment.id||debt.member!==payment.member||debt.paid)return false;
+   const debtMeeting=meetingForSaving(debt),paymentMeeting=meetingForSaving(payment);
+   if(debtMeeting&&paymentMeeting){const di=db.meetings.findIndex(mt=>mt.id===debtMeeting.id),pi=db.meetings.findIndex(mt=>mt.id===paymentMeeting.id);if(di>=0&&pi>=0)return di<pi;}
+   return String(debt.date||'')<String(payment.date||'');
+  }).sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+  for(const debt of debts){
+   const principalLeft=Math.max(0,Number(debt.amount||0)-(principalAllocated[debt.id]||0));
+   const fineLeft=Math.max(0,Number(debt.fine||0)-(fineAllocated[debt.id]||0));
+   const principal=Math.min(principalLeft,remaining);remaining-=principal;
+   const fine=Math.min(fineLeft,remaining);remaining-=fine;
+   const take=principal+fine;
+   if(take>0.009){
+    payment.arrearsAllocations.push({id:debt.id,amount:take,principal,fine});
+    principalAllocated[debt.id]=(principalAllocated[debt.id]||0)+principal;
+    fineAllocated[debt.id]=(fineAllocated[debt.id]||0)+fine;
+    debt.arrearsPaid=Number(debt.arrearsPaid||0)+take;
+    if(fine>0.009)db.transactions.push({id:'arrearsfine_'+payment.id+'_'+debt.id,kind:'income',amount:fine,date:payment.date,desc:'പിഴ വരവ്',meetingId:payment.meetingId||'',source:'arrears-fine'});
+   }
+   if(remaining<=0.009)break;
+  }
+ }
 }
 function editWeeklySaving(i,meetingId=''){
  const x=db.savings.find(z=>z.id===i);if(!x){alert('ഈ ഇടപാട് കണ്ടെത്താനായില്ല');return;}
@@ -207,23 +238,11 @@ function editWeeklySaving(i,meetingId=''){
  editingSavingId=i;page='meetings';meetingSections[mtId]='savings';render();setTimeout(()=>document.getElementById('savingEditor')?.scrollIntoView({behavior:'smooth',block:'center'}),50);
 }
 function rebuildSavingsArrears(){
- // Recreate automatically generated fine-income entries so edits/deletions never duplicate them.
- db.transactions=(db.transactions||[]).filter(t=>t.source!=='arrears-fine');
  for(const x of db.savings){x.arrearsPaid=0;x.arrearsAllocations=[];}
  const paid=db.savings.filter(x=>x.paid).slice().sort((a,b)=>a.date.localeCompare(b.date));
  for(const x of paid){let remaining=Math.max(0,Number(x.arrearsPayment||0));
   const debts=db.savings.filter(z=>z.id!==x.id&&z.member===x.member&&!z.paid&&z.date<x.date).sort((a,b)=>a.date.localeCompare(b.date));
-  for(const debt of debts){
-   const principalLeft=Math.max(0,Number(debt.amount||0)-sum(x.arrearsAllocations,a=>a.id===debt.id?Number(a.principal||0):0)-sum(paid.filter(p=>p!==x),p=>sum(p.arrearsAllocations||[],a=>a.id===debt.id?Number(a.principal||0):0)));
-   const fineLeft=Math.max(0,Number(debt.fine||0)-sum(paid.filter(p=>p!==x),p=>sum(p.arrearsAllocations||[],a=>a.id===debt.id?Number(a.fine||0):0))-sum(x.arrearsAllocations,a=>a.id===debt.id?Number(a.fine||0):0));
-   const principal=Math.min(principalLeft,remaining);remaining-=principal;
-   const fine=Math.min(fineLeft,remaining);remaining-=fine;
-   const take=principal+fine;
-   if(take>0.009){x.arrearsAllocations.push({id:debt.id,amount:take,principal,fine});debt.arrearsPaid=Number(debt.arrearsPaid||0)+take;
-    if(fine>0.009)db.transactions.push({id:'arrearsfine_'+x.id+'_'+debt.id,kind:'income',amount:fine,date:x.date,desc:'പിഴ വരവ്',meetingId:x.meetingId||'',source:'arrears-fine'});
-   }
-   if(remaining<=0.009)break;
-  }
+  for(const debt of debts){const left=Math.max(0,Number(debt.amount||0)+Number(debt.fine||0)-Number(debt.arrearsPaid||0));const take=Math.min(left,remaining);if(take>0){debt.arrearsPaid+=take;x.arrearsAllocations.push({id:debt.id,amount:take});remaining-=take;}if(remaining<=0.009)break;}
  }
 }
 function saveWeeklySavingEdit(){
@@ -291,7 +310,8 @@ function downloadBackup(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'a
 function restoreBackup(){let f=$('#backupfile').files[0];if(!f)return alert('ഫയൽ തിരഞ്ഞെടുക്കുക');let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);if(!d.members||!d.settings)throw 0;if(confirm('ഇപ്പോഴുള്ള ഡാറ്റ മാറ്റിസ്ഥാപിക്കട്ടേ?')){db=d;db.settings={...defaults.settings,...db.settings};save()}}catch(e){alert('ഈ ബാക്കപ്പ് ഫയൽ വായിക്കാൻ കഴിയില്ല')}};r.readAsText(f)}
 const savingsMigrationChanged=migrateMeetingBasedSavings();
 const orphanSavingsCleanupChanged=cleanupOrphanedMeetingSavings();
-if(savingsMigrationChanged||orphanSavingsCleanupChanged)localStorage.setItem(KEY,JSON.stringify(db));
+rebuildSavingsArrears();
+localStorage.setItem(KEY,JSON.stringify(db));
 render();
 </script>
 <script>
