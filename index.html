@@ -65,6 +65,26 @@ function nav(){ $('#nav').innerHTML=pages.map(([id,n])=>`<button class="${page==
 function go(p){page=p;render()}
 function memberName(id){return db.members.find(m=>m.id===id)?.name||'നീക്കംചെയ്ത അംഗം'}
 function sum(a,fn){return a.reduce((t,x)=>t+fn(x),0)}
+// Create a pending weekly-savings obligation for every meeting on or after a member's joining date.
+function ensureMeetingSavings(){
+ let changed=false;
+ const meetings=db.meetings.filter(mt=>mt.date).slice().sort((a,b)=>a.date.localeCompare(b.date));
+ const latestDate=meetings.length?meetings[meetings.length-1].date:'';
+ for(const mt of meetings){
+  for(const m of db.members){
+   if(!m.joinDate||mt.date<m.joinDate)continue;
+   const existing=db.savings.find(x=>x.member===m.id&&x.date===mt.date);
+   if(!existing){
+    db.savings.push({id:id(),member:m.id,date:mt.date,amount:Number(db.settings.weekly)||200,fine:(mt.closed||mt.date<latestDate)?(Number(db.settings.savingFine)||0):0,paid:false,arrearsPaid:0,arrearsPayment:0});
+    changed=true;
+   }else if(!existing.paid&&(mt.closed||mt.date<latestDate)&&Number(existing.fine||0)===0){
+    existing.fine=Number(db.settings.savingFine)||0;
+    changed=true;
+   }
+  }
+ }
+ return changed;
+}
 function formField(label,id,type='text',value='',extra=''){return `<label>${label}</label><input id="${id}" type="${type}" value="${esc(value)}" ${extra}>`}
 function showMeetingSection(mid,section){meetingSections[mid]=section;render()}
 function meetingSavingsPanel(mt){
@@ -185,9 +205,9 @@ function editLoan(i){let l=db.loans.find(x=>x.id===i);if(!l)return;let principal
 function deleteLoan(i){let l=db.loans.find(x=>x.id===i);if(!l)return;let paid=sum(l.payments||[],p=>Number(p.amount)||0),count=(l.payments||[]).length;let message=memberName(l.member)+' എന്ന അംഗത്തിന്റെ '+money(l.principal)+' വായ്പ ഡിലീറ്റ് ചെയ്യട്ടേ?';if(count)message+='\n\nഈ വായ്പയോടൊപ്പം '+count+' അടവ് രേഖകളും (മൊത്തം '+money(paid)+') ഡിലീറ്റ് ആകും.';message+='\n\nഈ നടപടി തിരികെ മാറ്റാൻ കഴിയില്ല.';if(!confirm(message))return;db.loans=db.loans.filter(x=>x.id!==i);save();alert('വായ്പയും ബന്ധപ്പെട്ട അടവ് രേഖകളും ഡിലീറ്റ് ചെയ്തു.')}
 function editLoanPayment(i,idx){let l=db.loans.find(x=>x.id===i),p=l?.payments?.[idx];if(!p)return;let amount=Number(prompt('തിരുത്തിയ അടച്ച തുക (₹)',p.amount));if(!Number.isFinite(amount)||amount<=0)return alert('ശരിയായ തുക നൽകുക');let date=prompt('അടവ് തീയതി (DD/MM/YYYY)',formatDateDisplay(p.date||''));date=parseDateDisplay(date);if(!date)return alert('ശരിയായ തീയതി നൽകുക');let other=sum(l.payments.filter((x,n)=>n!==idx),x=>Number(x.amount)||0);if(other+amount>l.total+0.009)return alert('അടച്ച മൊത്തം തുക വായ്പയുടെ ആകെ തുകയെക്കാൾ കൂടുതലാകരുത്. അനുവദിക്കാവുന്ന പരമാവധി: '+money(l.total-other));if(!confirm('ഈ അടവ് '+money(amount)+' ആയി തിരുത്തി സേവ് ചെയ്യട്ടേ?'))return;p.amount=amount;p.date=date;save()}
 function deleteLoanPayment(i,idx){let l=db.loans.find(x=>x.id===i),p=l?.payments?.[idx];if(!p)return;if(!confirm(formatDateDisplay(p.date||'')+' തീയതിയിലെ '+money(p.amount)+' അടവ് രേഖ നീക്കം ചെയ്യട്ടേ?'))return;l.payments.splice(idx,1);save()}
-function addMeeting(){const date=val('meetdate'),place=val('meetplace').trim(),time=val('meettime');if(!date||!place||!time)return alert('യോഗത്തിന്റെ തീയതി, സ്ഥലം, സമയം എന്നിവ മൂന്നും നൽകണം.');if(!confirm('ഈ തീയതി, സ്ഥലം, സമയം എന്നിവയോടെ പുതിയ യോഗം സൃഷ്ടിക്കട്ടേ?'))return;db.meetings.push({id:id(),date,place,time,closed:false,editing:false,fineOn:db.settings.attendanceFineOn,fineAmount:Number(db.settings.attendanceFine),attendance:db.members.map(m=>({member:m.id,status:'unmarked'}))});save()}
+function addMeeting(){const date=val('meetdate'),place=val('meetplace').trim(),time=val('meettime');if(!date||!place||!time)return alert('യോഗത്തിന്റെ തീയതി, സ്ഥലം, സമയം എന്നിവ മൂന്നും നൽകണം.');if(!confirm('ഈ തീയതി, സ്ഥലം, സമയം എന്നിവയോടെ പുതിയ യോഗം സൃഷ്ടിക്കട്ടേ?'))return;db.meetings.push({id:id(),date,place,time,closed:false,editing:false,fineOn:db.settings.attendanceFineOn,fineAmount:Number(db.settings.attendanceFine),attendance:db.members.map(m=>({member:m.id,status:'unmarked'}))});ensureMeetingSavings();save()}
 function setAttendance(mid,mem,status){let mt=db.meetings.find(x=>x.id===mid);if(!mt|| (mt.closed&&!mt.editing))return;let a=(mt.attendance||[]).find(x=>x.member===mem);if(a){a.status=status;save()}}
-function closeMeeting(mid){const mt=db.meetings.find(x=>x.id===mid);if(!mt||mt.closed)return;if(!confirm('ഹാജർ, ആഴ്ച സമ്പാദ്യം, വായ്പ, തിരിച്ചടവ് എന്നിവ പരിശോധിച്ചോ? ഈ യോഗം അവസാനിപ്പിക്കട്ടേ? അവസാനിപ്പിച്ചാൽ മാറ്റങ്ങൾക്കായി സെക്രട്ടറിയുടെ തിരുത്തൽ തിരഞ്ഞെടുക്കണം.'))return;mt.closed=true;mt.editing=false;mt.closedAt=new Date().toISOString();save()}
+function closeMeeting(mid){const mt=db.meetings.find(x=>x.id===mid);if(!mt||mt.closed)return;if(!confirm('ഹാജർ, ആഴ്ച സമ്പാദ്യം, വായ്പ, തിരിച്ചടവ് എന്നിവ പരിശോധിച്ചോ? ഈ യോഗം അവസാനിപ്പിക്കട്ടേ? അവസാനിപ്പിച്ചാൽ മാറ്റങ്ങൾക്കായി സെക്രട്ടറിയുടെ തിരുത്തൽ തിരഞ്ഞെടുക്കണം.'))return;mt.closed=true;mt.editing=false;mt.closedAt=new Date().toISOString();db.savings.filter(x=>x.date===mt.date&&!x.paid&&db.members.some(m=>m.id===x.member&&(!m.joinDate||m.joinDate<=mt.date))).forEach(x=>{if(Number(x.fine||0)===0)x.fine=Number(db.settings.savingFine)||0});save()}
 function deleteMeeting(mid){const mt=db.meetings.find(x=>x.id===mid);if(!mt)return;if(!confirm(formatDateDisplay(mt.date||'ഈ')+' തീയതിയിലെ യോഗം പൂർണമായി ഡിലീറ്റ് ചെയ്യട്ടേ?'))return;db.meetings=db.meetings.filter(x=>x.id!==mid);save()}
 function editMeeting(mid){const mt=db.meetings.find(x=>x.id===mid);if(!mt)return;if(!confirm('സെക്രട്ടറിയായി ഈ യോഗത്തിന്റെ വിവരങ്ങളും ഹാജരും തിരുത്താൻ അനുവദിക്കട്ടേ?'))return;mt.editing=true;save()}
 function saveMeetingEdit(mid){const mt=db.meetings.find(x=>x.id===mid);if(!mt||!mt.editing)return;const date=val('medate_'+mid),place=val('meplace_'+mid).trim(),time=val('metime_'+mid);if(!date||!place||!time)return alert('തീയതി, സ്ഥലം, സമയം എന്നിവ നൽകണം.');if(!confirm('തിരുത്തിയ വിവരങ്ങൾ സേവ് ചെയ്യട്ടേ?'))return;mt.date=date;mt.place=place;mt.time=time;mt.editing=false;save()}
@@ -201,6 +221,7 @@ function addInvestment(){let amount=Number(val('iamount'));if(amount<=0)return a
 function saveSettings(){db.settings={weekly:Number(val('setweekly')),savingFine:Number(val('setfine')),loanRate:Number(val('setrate')),loanWeeks:Number(val('setweeks')),attendanceFine:Number(val('setattfine')),attendanceFineOn:$('#setatton').checked};if(db.settings.weekly<0||db.settings.savingFine<0||db.settings.loanRate<0||db.settings.loanWeeks<1)return alert('ക്രമീകരണങ്ങൾ പരിശോധിക്കുക');save()}
 function downloadBackup(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='kathir-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(a.href)}
 function restoreBackup(){let f=$('#backupfile').files[0];if(!f)return alert('ഫയൽ തിരഞ്ഞെടുക്കുക');let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);if(!d.members||!d.settings)throw 0;if(confirm('ഇപ്പോഴുള്ള ഡാറ്റ മാറ്റിസ്ഥാപിക്കട്ടേ?')){db=d;db.settings={...defaults.settings,...db.settings};save()}}catch(e){alert('ഈ ബാക്കപ്പ് ഫയൽ വായിക്കാൻ കഴിയില്ല')}};r.readAsText(f)}
+if(ensureMeetingSavings())localStorage.setItem(KEY,JSON.stringify(db));
 render();
 </script>
 <script>
