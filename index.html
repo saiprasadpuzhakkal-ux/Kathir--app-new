@@ -66,6 +66,7 @@ function go(p){page=p;render()}
 function memberName(id){return db.members.find(m=>m.id===id)?.name||'നീക്കംചെയ്ത അംഗം'}
 function sum(a,fn){return a.reduce((t,x)=>t+fn(x),0)}
 function savingsArrearsTotal(){return sum(db.savings.filter(x=>!x.paid),x=>Math.max(0,Number(x.amount||0)+Number(x.fine||0)-Number(x.arrearsPaid||0)));}
+function memberSavingsTotal(member){const regular=sum(db.savings.filter(x=>x.member===member&&x.paid),x=>Number(x.amount)||0);const recovered=sum(db.savings.filter(x=>x.member===member&&x.paid),x=>sum(x.arrearsAllocations||[],a=>Number(a.principal||0)));return regular+recovered;}
 // Savings obligations are created only when an actual meeting is closed.
 function meetingForSaving(x){return x.meetingId?db.meetings.find(mt=>mt.id===x.meetingId):null;}
 function isSavingBeforeMeeting(x,mt){
@@ -159,7 +160,7 @@ function render(){
  }else if(page==='savings'){
  const totalArrears=savingsArrearsTotal();
  out=`<h2>ആഴ്ച സമ്പാദ്യം</h2><div class="metric" style="margin-bottom:10px"><b>${money(totalArrears)}</b><span>മൊത്തം സമ്പാദ്യ കുടിശ്ശികയും പിഴയും</span></div><div class="card"><h3>അംഗങ്ങളുടെ സമ്പാദ്യവും കുടിശ്ശികയും</h3><p class="muted">ആകെ സമ്പാദ്യം എന്നത് പൂർത്തിയാക്കിയ സമ്പാദ്യ രേഖകളുടെ തുകയാണ്. കുടിശ്ശികയിൽ അടയ്ക്കാത്ത ആഴ്ച സമ്പാദ്യവും അതിനുള്ള പിഴയും ഉൾപ്പെടും; ഭാഗികമായി അടച്ച തുക കുറച്ചാണ് കാണിക്കുന്നത്.</p><div class="tablewrap"><table><thead><tr><th>അംഗത്തിന്റെ പേര്</th><th>ആകെ സമ്പാദ്യം</th><th>കുടിശ്ശിക (പിഴ ഉൾപ്പെടെ)</th></tr></thead><tbody>
- ${db.members.map((m,i)=>{const total=sum(db.savings.filter(x=>x.member===m.id&&x.paid),x=>Number(x.amount)||0);const due=sum(db.savings.filter(x=>x.member===m.id&&!x.paid),x=>Math.max(0,Number(x.amount||0)+Number(x.fine||0)-Number(x.arrearsPaid||0)));return `<tr><td>${i+1}. ${esc(m.name)}</td><td><b>${money(total)}</b></td><td><b>${money(due)}</b></td></tr>`}).join('')||'<tr><td colspan="3" class="empty">അംഗങ്ങളില്ല</td></tr>'}
+ ${db.members.map((m,i)=>{const total=memberSavingsTotal(m.id);const due=sum(db.savings.filter(x=>x.member===m.id&&!x.paid),x=>Math.max(0,Number(x.amount||0)+Number(x.fine||0)-Number(x.arrearsPaid||0)));return `<tr><td>${i+1}. ${esc(m.name)}</td><td><b>${money(total)}</b></td><td><b>${money(due)}</b></td></tr>`}).join('')||'<tr><td colspan="3" class="empty">അംഗങ്ങളില്ല</td></tr>'}
  </tbody></table></div></div>`;
  }else if(page==='loans'){
  out=`<h2>വായ്പകൾ</h2><div class="card"><h3>വായ്പ എടുത്ത അംഗങ്ങളുടെ പട്ടിക</h3><div class="tablewrap"><table style="min-width:620px"><thead><tr><th>അംഗത്തിന്റെ പേര്</th><th>വായ്പ എടുത്ത തുക</th><th>എടുത്ത തീയതി</th><th>ബാക്കി അടയ്ക്കാനുള്ള തുക</th><th>അവസാന തീയതി</th></tr></thead><tbody>${db.loans.map(l=>{let paid=sum(l.payments||[],p=>Number(p.amount)||0),bal=Math.max(0,l.total-paid);return `<tr><td><b>${esc(memberName(l.member))}</b><details class="small" style="margin-top:5px"><summary>വായ്പ / അടവ് വിവരങ്ങൾ</summary><div class="actions" style="margin:8px 0"><button class="btn" onclick="editLoan('${l.id}')">വായ്പ എഡിറ്റ്</button><button class="btn danger" onclick="deleteLoan('${l.id}')">വായ്പ ഡിലീറ്റ്</button></div><b>അടവുകളുടെ ചരിത്രം</b>${(l.payments||[]).length?`<div class="tablewrap"><table><thead><tr><th>അടവ് തീയതി</th><th>അടച്ച തുക</th><th>നടപടി</th></tr></thead><tbody>${l.payments.map((pay,idx)=>`<tr><td>${esc(formatDateDisplay(pay.date||''))}</td><td>${money(pay.amount)}</td><td><div class="actions"><button class="btn" onclick="editLoanPayment('${l.id}',${idx})">അടവ് എഡിറ്റ്</button><button class="btn danger" onclick="deleteLoanPayment('${l.id}',${idx})">അടവ് നീക്കുക</button></div></td></tr>`).join('')}</tbody></table></div>`:'<p class="small muted">അടവുകൾ രേഖപ്പെടുത്തിയിട്ടില്ല.</p>'}</details></td><td>${money(l.principal)}</td><td>${esc(formatDateDisplay(l.created||''))}</td><td><b>${money(bal)}</b></td><td><b>${esc(formatDateDisplay(loanDueDate(l)))}</b></td></tr>`}).join('')||'<tr><td colspan="5" class="empty">വായ്പകളില്ല</td></tr>'}</tbody></table></div><p class="muted">ബാക്കി തുകയിൽ വായ്പയുടെ പലിശ ഉൾപ്പെടും. അവസാന തീയതി = വായ്പ എടുത്ത തീയതി + രേഖപ്പെടുത്തിയ കാലാവധി (${db.settings.loanWeeks} ആഴ്ച ഡിഫോൾട്ട്). അംഗത്തിന്റെ പേരിന് താഴെയുള്ള “വായ്പ / അടവ് വിവരങ്ങൾ” തുറന്ന് എഡിറ്റ്, ഡിലീറ്റ്, അടவുകളുടെ ചരിത്രം കാണാം.</p></div>`;
@@ -197,10 +198,7 @@ function completeWeeklySaving(member,existingId,meetingId){
  if(arrearsPayment>due+0.009)return alert('നൽകിയ കുടിശ്ശിക അടവ് നിലവിലുള്ള കുടിശ്ശികയെക്കാൾ കൂടുതലാണ്: '+money(due));
  if(!x){x={id:id(),member,meetingId,date:mt.date,amount:0,fine:0,paid:false,arrearsPaid:0};db.savings.push(x);}
  x.meetingId=meetingId;x.date=mt.date;x.amount=amount;x.fine=fine;x.arrearsPayment=arrearsPayment;x.arrearsAllocations=[];
- let remaining=arrearsPayment;
- const debts=db.savings.filter(z=>z.id!==x.id&&z.member===member&&!z.paid&&isSavingBeforeMeeting(z,mt)).sort((a,b)=>a.date.localeCompare(b.date));
- for(const debt of debts){let left=Math.max(0,Number(debt.amount||0)+Number(debt.fine||0)-Number(debt.arrearsPaid||0));let take=Math.min(left,remaining);if(take>0){debt.arrearsPaid=Number(debt.arrearsPaid||0)+take;x.arrearsAllocations.push({id:debt.id,amount:take});remaining-=take}if(remaining<=0.009)break}
- x.paid=true;save();
+ x.paid=true;rebuildSavingsArrears();save();
 }
 function editWeeklySaving(i,meetingId=''){
  const x=db.savings.find(z=>z.id===i);if(!x){alert('ഈ ഇടപാട് കണ്ടെത്താനായില്ല');return;}
@@ -209,11 +207,23 @@ function editWeeklySaving(i,meetingId=''){
  editingSavingId=i;page='meetings';meetingSections[mtId]='savings';render();setTimeout(()=>document.getElementById('savingEditor')?.scrollIntoView({behavior:'smooth',block:'center'}),50);
 }
 function rebuildSavingsArrears(){
+ // Recreate automatically generated fine-income entries so edits/deletions never duplicate them.
+ db.transactions=(db.transactions||[]).filter(t=>t.source!=='arrears-fine');
  for(const x of db.savings){x.arrearsPaid=0;x.arrearsAllocations=[];}
  const paid=db.savings.filter(x=>x.paid).slice().sort((a,b)=>a.date.localeCompare(b.date));
  for(const x of paid){let remaining=Math.max(0,Number(x.arrearsPayment||0));
   const debts=db.savings.filter(z=>z.id!==x.id&&z.member===x.member&&!z.paid&&z.date<x.date).sort((a,b)=>a.date.localeCompare(b.date));
-  for(const debt of debts){const left=Math.max(0,Number(debt.amount||0)+Number(debt.fine||0)-Number(debt.arrearsPaid||0));const take=Math.min(left,remaining);if(take>0){debt.arrearsPaid+=take;x.arrearsAllocations.push({id:debt.id,amount:take});remaining-=take;}if(remaining<=0.009)break;}
+  for(const debt of debts){
+   const principalLeft=Math.max(0,Number(debt.amount||0)-sum(x.arrearsAllocations,a=>a.id===debt.id?Number(a.principal||0):0)-sum(paid.filter(p=>p!==x),p=>sum(p.arrearsAllocations||[],a=>a.id===debt.id?Number(a.principal||0):0)));
+   const fineLeft=Math.max(0,Number(debt.fine||0)-sum(paid.filter(p=>p!==x),p=>sum(p.arrearsAllocations||[],a=>a.id===debt.id?Number(a.fine||0):0))-sum(x.arrearsAllocations,a=>a.id===debt.id?Number(a.fine||0):0));
+   const principal=Math.min(principalLeft,remaining);remaining-=principal;
+   const fine=Math.min(fineLeft,remaining);remaining-=fine;
+   const take=principal+fine;
+   if(take>0.009){x.arrearsAllocations.push({id:debt.id,amount:take,principal,fine});debt.arrearsPaid=Number(debt.arrearsPaid||0)+take;
+    if(fine>0.009)db.transactions.push({id:'arrearsfine_'+x.id+'_'+debt.id,kind:'income',amount:fine,date:x.date,desc:'പിഴ വരവ്',meetingId:x.meetingId||'',source:'arrears-fine'});
+   }
+   if(remaining<=0.009)break;
+  }
  }
 }
 function saveWeeklySavingEdit(){
