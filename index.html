@@ -90,6 +90,24 @@ function migrateMeetingBasedSavings(){
  db.settings.meetingBasedSavingsV1=true;
  return true;
 }
+// v35: remove orphaned savings left behind by meetings deleted in older versions.
+// Every current savings record must belong to a meeting that still exists.
+function cleanupOrphanedMeetingSavings(){
+ if(db.settings.meetingSavingsCleanupV2)return false;
+ const byId=new Map(db.meetings.map(mt=>[mt.id,mt]));
+ const byDate=new Map();
+ for(const mt of db.meetings){if(mt.date)byDate.set(mt.date,mt);}
+ db.savings=db.savings.filter(x=>{
+  if(x.meetingId)return byId.has(x.meetingId);
+  const mt=byDate.get(x.date);
+  if(!mt)return false;
+  x.meetingId=mt.id;
+  return true;
+ });
+ db.settings.meetingSavingsCleanupV2=true;
+ rebuildSavingsArrears();
+ return true;
+}
 function formField(label,id,type='text',value='',extra=''){return `<label>${label}</label><input id="${id}" type="${type}" value="${esc(value)}" ${extra}>`}
 function showMeetingSection(mid,section){meetingSections[mid]=section;render()}
 function meetingSavingsPanel(mt){
@@ -237,7 +255,11 @@ function deleteMeeting(mid){
  const summary=`${formatDateDisplay(mt.date||'ഈ')} തീയതിയിലെ യോഗം ഡിലീറ്റ് ചെയ്യട്ടേ?\n\nഇതോടൊപ്പം നീക്കം ചെയ്യപ്പെടുന്നവ:\n• ${linkedSavings.length} സമ്പാദ്യ രേഖകൾ\n• ${linkedTransactions.length} വരവ് / ചെലവ് രേഖകൾ\n• ${linkedLoans.length} വായ്പകൾ\n• ${linkedPayments} വായ്പ തിരിച്ചടവ് രേഖകൾ\n• ഈ യോഗത്തിലെ ഹാജർ വിവരങ്ങൾ\n\nഈ നടപടി തിരികെ മാറ്റാൻ കഴിയില്ല.`;
  if(!confirm(summary))return;
  db.meetings=db.meetings.filter(x=>x.id!==mid);
- db.savings=db.savings.filter(x=>!linkedSavings.some(y=>y.id===x.id));
+ const remainingMeetingIds=new Set(db.meetings.map(x=>x.id));
+ db.savings=db.savings.filter(x=>
+  !linkedSavings.some(y=>y.id===x.id) &&
+  (!x.meetingId || remainingMeetingIds.has(x.meetingId))
+ );
  db.transactions=db.transactions.filter(x=>x.meetingId!==mid);
  db.loans=db.loans.filter(l=>!linkedLoans.some(x=>x.id===l.id));
  for(const loan of db.loans){loan.payments=(loan.payments||[]).filter(p=>p.meetingId!==mid&&!(!p.meetingId&&p.date===mt.date));}
@@ -257,7 +279,9 @@ function addInvestment(){let amount=Number(val('iamount'));if(amount<=0)return a
 function saveSettings(){db.settings={weekly:Number(val('setweekly')),savingFine:Number(val('setfine')),loanRate:Number(val('setrate')),loanWeeks:Number(val('setweeks')),attendanceFine:Number(val('setattfine')),attendanceFineOn:$('#setatton').checked};if(db.settings.weekly<0||db.settings.savingFine<0||db.settings.loanRate<0||db.settings.loanWeeks<1)return alert('ക്രമീകരണങ്ങൾ പരിശോധിക്കുക');save()}
 function downloadBackup(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='kathir-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(a.href)}
 function restoreBackup(){let f=$('#backupfile').files[0];if(!f)return alert('ഫയൽ തിരഞ്ഞെടുക്കുക');let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);if(!d.members||!d.settings)throw 0;if(confirm('ഇപ്പോഴുള്ള ഡാറ്റ മാറ്റിസ്ഥാപിക്കട്ടേ?')){db=d;db.settings={...defaults.settings,...db.settings};save()}}catch(e){alert('ഈ ബാക്കപ്പ് ഫയൽ വായിക്കാൻ കഴിയില്ല')}};r.readAsText(f)}
-if(migrateMeetingBasedSavings())localStorage.setItem(KEY,JSON.stringify(db));
+const savingsMigrationChanged=migrateMeetingBasedSavings();
+const orphanSavingsCleanupChanged=cleanupOrphanedMeetingSavings();
+if(savingsMigrationChanged||orphanSavingsCleanupChanged)localStorage.setItem(KEY,JSON.stringify(db));
 render();
 </script>
 <script>
