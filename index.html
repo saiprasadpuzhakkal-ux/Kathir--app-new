@@ -237,14 +237,6 @@ function editWeeklySaving(i,meetingId=''){
  if(!mtId||!db.meetings.some(z=>z.id===mtId)){alert('ഈ സമ്പാദ്യവുമായി ബന്ധപ്പെട്ട യോഗം കണ്ടെത്താനായില്ല.');return;}
  editingSavingId=i;page='meetings';meetingSections[mtId]='savings';render();setTimeout(()=>document.getElementById('savingEditor')?.scrollIntoView({behavior:'smooth',block:'center'}),50);
 }
-function rebuildSavingsArrears(){
- for(const x of db.savings){x.arrearsPaid=0;x.arrearsAllocations=[];}
- const paid=db.savings.filter(x=>x.paid).slice().sort((a,b)=>a.date.localeCompare(b.date));
- for(const x of paid){let remaining=Math.max(0,Number(x.arrearsPayment||0));
-  const debts=db.savings.filter(z=>z.id!==x.id&&z.member===x.member&&!z.paid&&z.date<x.date).sort((a,b)=>a.date.localeCompare(b.date));
-  for(const debt of debts){const left=Math.max(0,Number(debt.amount||0)+Number(debt.fine||0)-Number(debt.arrearsPaid||0));const take=Math.min(left,remaining);if(take>0){debt.arrearsPaid+=take;x.arrearsAllocations.push({id:debt.id,amount:take});remaining-=take;}if(remaining<=0.009)break;}
- }
-}
 function saveWeeklySavingEdit(){
  const x=db.savings.find(z=>z.id===editingSavingId);if(!x)return alert('ഇടപാട് കണ്ടെത്താനായില്ല');
  const d=val('editSavingDate'),amount=Number(val('editSavingAmount')),fine=Number(val('editSavingFine')),arrearsPayment=Number(val('editSavingArrears'));
