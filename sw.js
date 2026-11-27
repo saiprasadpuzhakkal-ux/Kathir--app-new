@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kathir-pwa-v33';
+const CACHE_NAME = 'kathir-pwa-v34';
 const APP_FILES = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_FILES)));
